@@ -41,6 +41,12 @@ export const getSession = (req: IncomingMessage) => {
         sessions[session.id] = session;
     }
 
+    if (!session) {
+        throw new Error(
+            "Session not found (you probably need to erase all browser cookies).",
+        );
+    }
+
     console.log("Sessions:", JSON.stringify(sessions, null, 2));
 
     return session;
