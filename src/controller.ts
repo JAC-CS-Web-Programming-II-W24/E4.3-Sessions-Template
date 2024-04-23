@@ -4,37 +4,48 @@ import { renderTemplate } from "./view";
 import { getSession } from "./session";
 
 export const getHome = async (req: IncomingMessage, res: ServerResponse) => {
-    /**
-     * 1. Get the session object from the request using the getSession function.
-     * 2. Set the response status code to 200.
-     * 3. Set the response header "Content-Type" to "text/html".
-     * 4. Set the response header "Set-Cookie" to the session id.
-     * 5. End the response by rendering the HomeView template.
-     */
+    const session = getSession(req);
 
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html");
+    res.setHeader("Set-Cookie", `session_id=${session.id}`);
     res.end(
         await renderTemplate("src/views/HomeView.hbs", {
-            title: "Welcome Guest!",
+            title: session.data.isLoggedIn
+                ? `Welcome ${session.data.name}!`
+                : "Welcome Guest!",
+            isLoggedIn: session.data.isLoggedIn,
         }),
     );
 };
 
 export const login = async (req: IncomingMessage, res: ServerResponse) => {
-    /**
-     * 1. Get the session object from the request using the getSession function.
-     * 2. Parse the request body to get the user's name.
-     * 3. Set the session data isLoggedIn to true.
-     * 4. Set the session data name to the user's name.
-     * 5. Set the response status code to 303.
-     * 6. Set the response header "Location" to "/".
-     * 7. Set the response header "Set-Cookie" to the session id.
-     * 8. End the response.
-     */
+    const session = getSession(req);
+    const body = await parseBody(req);
+
+    session.data.isLoggedIn = true;
+    session.data.name = body.name;
 
     res.statusCode = 303;
     res.setHeader("Location", "/");
+    res.setHeader("Set-Cookie", `session_id=${session.id}`);
+    res.end();
+};
+
+export const logout = async (req: IncomingMessage, res: ServerResponse) => {
+    const session = getSession(req);
+
+    // Set the cookie to expire by setting the Expires attribute to a date in the past.
+    const expires = new Date(new Date().getTime() - 5000).toUTCString();
+
+    // Destroy the session data.
+    session.data = {};
+
+    res.statusCode = 303;
+    res.setHeader("Location", "/");
+    res.setHeader("Set-Cookie", [
+        `session_id=${session.id}; Expires=${expires}`,
+    ]);
     res.end();
 };
 
@@ -42,53 +53,52 @@ export const getAllPokemon = async (
     req: IncomingMessage,
     res: ServerResponse,
 ) => {
-    /**
-     * 1. Get the session object from the request using the getSession function.
-     * 2. Set the response status code to 200.
-     * 3. Set the response header "Content-Type" to "text/html".
-     * 4. Set the response header "Set-Cookie" to the session id.
-     * 5. End the response by rendering the ListView template.
-     *    Pass the title "All Pokemon", the database of pokemon, and the session data isLoggedIn.
-     * 6. In ListView.hbs, only display the form to create a new pokemon if the user is logged in.
-     */
+    const session = getSession(req);
 
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html");
+    res.setHeader("Set-Cookie", `session_id=${session.id}`);
     res.end(
         await renderTemplate("src/views/ListView.hbs", {
             title: "All Pokemon",
             pokemon: database,
+            isLoggedIn: session.data.isLoggedIn,
         }),
     );
-};
-
-export const logout = async (req: IncomingMessage, res: ServerResponse) => {
-    /**
-     * 1. Get the session object from the request using the getSession function.
-     * 2. Set the cookie to expire by setting the Expires attribute to a date in the past.
-     * 3. Set the response status code to 303.
-     * 4. Set the response header "Location" to "/".
-     * 5. Set the response header "Set-Cookie" to the session id with the expiration date.
-     * 6. End the response.
-     */
-
-    res.statusCode = 303;
-    res.setHeader("Location", "/");
-    res.end();
 };
 
 export const createPokemon = async (
     req: IncomingMessage,
     res: ServerResponse,
 ) => {
-    /**
-     * Before adding the Pokemon, check if the user is logged in.
-     * If not, set the response status code to 401 Unauthorized.
-     * Render the ErrorView template or send a message "You must
-     * be logged in to view this page" depending on the user-agent.
-     *
-     * Finally, grab the session and set the session cookie.
-     */
+    const session = getSession(req);
+
+    // Check if the user is logged in.
+    if (!session.data.isLoggedIn) {
+        res.statusCode = 401; // 401 Unauthorized
+        res.setHeader(
+            "Content-Type",
+            req.headers["user-agent"]?.includes("curl")
+                ? "application/json"
+                : "text/html",
+        );
+        res.end(
+            req.headers["user-agent"]?.includes("curl")
+                ? JSON.stringify(
+                      {
+                          statusCode: 401,
+                          message: "You must be logged in to view this page",
+                      },
+                      null,
+                      2,
+                  )
+                : await renderTemplate("src/views/ErrorView.hbs", {
+                      title: "Unauthorized",
+                      message: "You must be logged in to view this page",
+                  }),
+        );
+        return;
+    }
 
     const body = await parseBody(req);
     const newPokemon = {
@@ -101,6 +111,7 @@ export const createPokemon = async (
 
     res.statusCode = 303;
     res.setHeader("Location", "/pokemon");
+    res.setHeader("Set-Cookie", `session_id=${session.id}`);
     res.end();
 };
 

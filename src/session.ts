@@ -9,6 +9,7 @@ import { IncomingMessage } from "http";
 export interface Session {
     id: number;
     data: Record<string, any>;
+    expiry: Date;
 }
 
 // The sessions object is a dictionary that maps session ids to session objects.
@@ -21,35 +22,8 @@ export const createSession = (): Session => {
     return {
         id: Math.floor(Math.random() * 1000), // Random number between 0 and 999.
         data: {},
+        expiry: new Date(Date.now() + 5000), // 1 minute from now.
     };
-};
-
-/**
- * @returns The session object of the request.
- */
-export const getSession = (req: IncomingMessage) => {
-    const sessionId = getCookies(req)["session_id"];
-    let session: Session | undefined;
-
-    // If the session id exists, the session is retrieved from the sessions object.
-    if (sessionId) {
-        session = sessions[sessionId];
-    }
-    // If the session does not exist, a new session is created with a random id.
-    else {
-        session = createSession();
-        sessions[session.id] = session;
-    }
-
-    if (!session) {
-        throw new Error(
-            "Session not found (you probably need to erase all browser cookies).",
-        );
-    }
-
-    console.log("Sessions:", JSON.stringify(sessions, null, 2));
-
-    return session;
 };
 
 /**
@@ -70,3 +44,49 @@ export const getCookies = (req: IncomingMessage) => {
 
     return cookies;
 };
+
+/**
+ * @returns The session object of the request.
+ */
+export const getSession = (req: IncomingMessage) => {
+    const sessionId = getCookies(req)["session_id"];
+    let session: Session | undefined;
+
+    // If the session id exists, the session is retrieved from the sessions object.
+    if (sessionId) {
+        session = sessions[sessionId];
+    }
+
+    // If the session does not exist, a new session is created with a random id.
+    if (!session) {
+        session = createSession();
+        sessions[session.id] = session;
+    }
+
+    if (!session) {
+        throw new Error(
+            "Session not found (you probably need to erase all browser cookies).",
+        );
+    }
+
+    console.log("Sessions:", JSON.stringify(sessions, null, 2));
+
+    return session;
+};
+
+const cleanUpSessions = () => {
+    const now = new Date();
+
+    // Remove expired sessions.
+    for (const sessionId in sessions) {
+        const session = sessions[sessionId];
+
+        if (session.expiry < now) {
+            console.log(`Session ${sessionId} expired.`);
+            delete sessions[sessionId];
+        }
+    }
+};
+
+// Clean up expired sessions every 5 seconds.
+setInterval(cleanUpSessions, 5000);

@@ -27,6 +27,7 @@
 </table>
 {{/ unless }}
 
+{{#if isLoggedIn}}
 <form method="POST" action="/pokemon" id="new-pokemon-form">
 	<div>
 		<label for="name">Name:</label>
@@ -40,3 +41,7 @@
 
 	<button>Create</button>
 </form>
+{{else}}
+<p>You need to be logged in to add a new Pokemon.</p>
+{{/if}}
+{{> Footer }}
